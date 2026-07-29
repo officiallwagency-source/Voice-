@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Speakeasy — Text to Voice</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0b0d10;
+    --panel: #14171c;
+    --panel-raised: #1b1f26;
+    --line: #262b33;
+    --text: #ede9e2;
+    --text-dim: #8a8f98;
+    --accent: #7c6cff;
+    --accent-dim: #4a3fb0;
+    --amber: #ffb86b;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 760px;
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 40px;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+
+  .sub {
+    color: var(--text-dim);
+    font-size: 14.5px;
+    margin-bottom: 28px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 150px;
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding: 16px;
+    resize: vertical;
+    outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: #565c66; }
+
+  /* word highlight overlay */
+  #highlightView {
+    display: none;
+    width: 100%;
+    min-height: 150px;
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 16px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+  #highlightView .spoken { color: var(--text-dim); }
+  #highlightView .current {
+    color: var(--bg);
+    background: var(--amber);
+    border-radius: 3px;
+    padding: 0 2px;
+  }
+
+  /* waveform */
+  .wave-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 20px 0 18px;
+  }
+  .wave {
+    flex: 1;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    overflow: hidden;
+  }
+  .wave span {
+    flex: 1;
+    background: var(--accent-dim);
+    border-radius: 2px;
+    height: 8px;
+    transition: background 0.3s;
+  }
+  .wave.active span { background: var(--accent); }
+
+  .status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    min-width: 78px;
+    text-align: right;
+  }
+  .status.speaking { color: var(--amber); }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+  }
+
+  button {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 20px;
+    cursor: pointer;
+    transition: transform 0.08s ease, opacity 0.15s ease;
+  }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: #8a7bff; }
+  .btn-ghost { background: var(--panel-raised); color: var(--text); border: 1px solid var(--line); }
+  .btn-ghost:hover:not(:disabled) { border-color: var(--accent); }
+
+  .settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+  }
+  .field { grid-column: span 2; }
+  @media (min-width: 520px) {
+    .field.half { grid-column: span 1; }
+  }
+
+  label {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  label span.val { color: var(--amber); }
+
+  select {
+    width: 100%;
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 9px 10px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13.5px;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+
+  .footnote {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    color: #565c66;
+    margin-top: 16px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="eyebrow">Browser-native speech synthesis</div>
+  <h1>Speakeasy</h1>
+  <div class="sub">Type something. Pick a voice. Hear it read back, word by word.</div>
+
+  <div class="panel">
+    <textarea id="textInput" placeholder="Paste or type the text you want spoken aloud…">Every voice carries a signature — the pace, the pitch, the tiny pause before a hard word. This is a small stage for yours to try on someone else's.</textarea>
+    <div id="highlightView"></div>
+
+    <div class="wave-row">
+      <div class="wave" id="wave"></div>
+      <div class="status" id="status">idle</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-primary" id="playBtn">▶ Speak</button>
+      <button class="btn-ghost" id="pauseBtn" disabled>‖ Pause</button>
+      <button class="btn-ghost" id="stopBtn" disabled>■ Stop</button>
+    </div>
+
+    <div class="settings-grid">
+      <div class="field">
+        <label>Voice</label>
+        <select id="voiceSelect"></select>
+      </div>
+      <div class="field half">
+        <label>Rate <span class="val" id="rateVal">1.0</span></label>
+        <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+      </div>
+      <div class="field half">
+        <label>Pitch <span class="val" id="pitchVal">1.0</span></label>
+        <input type="range" id="pitch" min="0" max="2" step="0.1" value="1">
+      </div>
+      <div class="field half">
+        <label>Volume <span class="val" id="volVal">1.0</span></label>
+        <input type="range" id="volume" min="0" max="1" step="0.1" value="1">
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">Runs entirely in your browser via the Web Speech API — nothing is uploaded.</div>
+</div>
+
+<script>
+  const synth = window.speechSynthesis;
+  const textInput = document.getElementById('textInput');
+  const highlightView = document.getElementById('highlightView');
+  const voiceSelect = document.getElementById('voiceSelect');
+  const playBtn = document.getElementById('playBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const statusEl = document.getElementById('status');
+  const wave = document.getElementById('wave');
+  const rateInput = document.getElementById('rate');
+  const pitchInput = document.getElementById('pitch');
+  const volInput = document.getElementById('volume');
+
+  let voices = [];
+  let waveBars = [];
+  let waveTimer = null;
+  let utterance = null;
+
+  // build waveform bars
+  const BAR_COUNT = 48;
+  for (let i = 0; i < BAR_COUNT; i++) {
+    const bar = document.createElement('span');
+    wave.appendChild(bar);
+    waveBars.push(bar);
+  }
+
+  function randomizeWave() {
+    waveBars.forEach(b => {
+      const h = 6 + Math.random() * 42;
+      b.style.height = h + 'px';
+    });
+  }
+  function flattenWave() {
+    waveBars.forEach(b => b.style.height = '8px');
+  }
+
+  function populateVoices() {
+    voices = synth.getVoices().sort((a, b) => a.lang.localeCompare(b.lang));
+    voiceSelect.innerHTML = '';
+    voices.forEach((v, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${v.name} — ${v.lang}${v.default ? ' (default)' : ''}`;
+      voiceSelect.appendChild(opt);
+    });
+  }
+  populateVoices();
+  if (typeof speechSynthesis !== 'undefined') {
+    speechSynthesis.onvoiceschanged = populateVoices;
+  }
+
+  [rateInput, pitchInput, volInput].forEach(inp => {
+    inp.addEventListener('input', () => {
+      document.getElementById(inp.id === 'volume' ? 'volVal' : inp.id + 'Val').textContent =
+        parseFloat(inp.value).toFixed(1);
+    });
+  });
+
+  function setStatus(text, speaking) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle('speaking', !!speaking);
+  }
+
+  function buildHighlightMarkup(words, currentIdx) {
+    return words.map((w, i) => {
+      if (i < currentIdx) return `<span class="spoken">${w}</span>`;
+      if (i === currentIdx) return `<span class="current">${w}</span>`;
+      return `<span>${w}</span>`;
+    }).join(' ');
+  }
+
+  function speak() {
+    const text = textInput.value.trim();
+    if (!text) return;
+
+    synth.cancel();
+    utterance = new SpeechSynthesisUtterance(text);
+    const chosen = voices[voiceSelect.value];
+    if (chosen) utterance.voice = chosen;
+    utterance.rate = parseFloat(rateInput.value);
+    utterance.pitch = parseFloat(pitchInput.value);
+    utterance.volume = parseFloat(volInput.value);
+
+    const words = text.split(/\s+/);
+    let charOffsets = [];
+    let acc = 0;
+    words.forEach(w => {
+      charOffsets.push(acc);
+      acc += w.length + 1;
+    });
+
+    textInput.style.display = 'none';
+    highlightView.style.display = 'block';
+    highlightView.innerHTML = buildHighlightMarkup(words, -1);
+
+    utterance.onboundary = (e) => {
+      if (e.name !== 'word') return;
+      let idx = 0;
+      for (let i = 0; i < charOffsets.length; i++) {
+        if (charOffsets[i] <= e.charIndex) idx = i; else break;
+      }
+      highlightView.innerHTML = buildHighlightMarkup(words, idx);
+    };
+
+    utterance.onstart = () => {
+      setStatus('speaking', true);
+      wave.classList.add('active');
+      waveTimer = setInterval(randomizeWave, 90);
+      playBtn.disabled = true;
+      pauseBtn.disabled = false;
+      stopBtn.disabled = false;
+      pauseBtn.textContent = '‖ Pause';
+    };
+
+    utterance.onend = resetToIdle;
+    utterance.onerror = resetToIdle;
+
+    synth.speak(utterance);
+  }
+
+  function resetToIdle() {
+    clearInterval(waveTimer);
+    flattenWave();
+    wave.classList.remove('active');
+    setStatus('idle', false);
+    playBtn.disabled = false;
+    pauseBtn.disabled = true;
+    stopBtn.disabled = true;
+    textInput.style.display = 'block';
+    highlightView.style.display = 'none';
+  }
+
+  playBtn.addEventListener('click', speak);
+
+  pauseBtn.addEventListener('click', () => {
+    if (synth.speaking && !synth.paused) {
+      synth.pause();
+      clearInterval(waveTimer);
+      flattenWave();
+      setStatus('paused', false);
+      pauseBtn.textContent = '▶ Resume';
+    } else if (synth.paused) {
+      synth.resume();
+      waveTimer = setInterval(randomizeWave, 90);
+      setStatus('speaking', true);
+      pauseBtn.textContent = '‖ Pause';
+    }
+  });
+
+  stopBtn.addEventListener('click', () => {
+    synth.cancel();
+    resetToIdle();
+  });
+</script>
+
+</body>
+</html>
